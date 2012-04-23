@@ -60,3 +60,18 @@ JavaScript functional programming library.
 
 Local Modifications:
 -none-
+
+
+EventEmitter
+============
+
+URL: https://github.com/Wolfy87/EventEmitter/
+Version: 3.1.4
+License: MIT
+License File: README.md
+
+Description:
+Evented JavaScript for the browser.
+
+Local Modifications:
+-none-

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define(['keys', 'history', 'cwd', 'jquery'], function(keys, historyApi, cwd, $){
+define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], function(keys, historyApi, cwd, $, jobManager, poller){
   "use strict";
   
   var key = (function initializeKey() {
@@ -41,39 +41,61 @@ define(['keys', 'history', 'cwd', 'jquery'], function(keys, historyApi, cwd, $){
     return e;
   }
 
-  var jobCount = 0;
-  
-  function addJobDiv(cmd) {
-    var job = "job" + (++jobCount);
-    var node = $('<div></div>', { 'id': job, 'class': 'job' });
-    node.bind('click', function() {
+  function JobView() {
+    var $node = $('<div></div>', { 'class': 'job' });
+    $node.bind('click', function() {
         if($(this).children(":nth-child(2)").is(':hidden')) {
           $('#scrollback .job').children(":nth-child(2)").slideUp(); 
           $(this).children(":nth-child(2)").slideDown('normal');
         }
     });
-    node.appendTo(scrollback);
+    $node.appendTo(scrollback);
 
     // Folding
     $('#scrollback .job').children(":nth-child(2)").slideUp();
-    node.children(":first").slideDown('normal');
+    $node.children(":first").slideDown('normal');
 
-    return job;
+    this.$node = $node;
+    this.job = null;
   }
-  
-  function setJobClass(job, cls) {
-    var where = $('#' + job);
-    if (where.length != 1) { return; }
-    where.removeClass('running complete').addClass(cls);
-  }
-  
-  function addOutput(job, cls, txt) {
-    var where = $('#' + job);
-    if (where.length != 1) { where = scrollback; }
-    var node = $('<pre></pre>', { 'class': cls }).text(txt);
-    node.appendTo(where);
-    totalHeight += node.outerHeight();
-    scrollback.animate({scrollTop: totalHeight });
+
+  JobView.prototype.setJob = function(job) {
+    if (this.job) {
+      // API should probably be redesigned to prevent this.
+      throw new Error("JobView already has a job set");
+    }
+
+    this.job = job;
+    var $node = this.$node;
+
+    this.setJobClass("running");
+
+    var self = this;
+    job.on('exit', function(exitcode) {
+      self.setJobClass(exitcode === 0 ? "complete" : "failed");
+    });
+
+    job.stdout.on('data', this.addOutput.bind(this, 'stdout'));
+    job.stderr.on('data', this.addOutput.bind(this, 'stdin'));
+
+    job.jsonout.on('data', function(data) {
+      self.addOutput('stdout', data.reduce(function(acc, json) {
+        return acc + JSON.stringify(j, null, 4) + "\n";
+      }));
+    });
+  };
+
+  JobView.prototype.setJobClass = function(cls) {
+    this.$node.removeClass('running complete').addClass(cls);
+  };
+
+  JobView.prototype.addOutput = function(cls, txt) {
+    var $txt = $('<pre></pre>', { 'class': cls }).text(txt);
+    $txt.appendTo(this.$node);
+
+    totalHeight += $txt.outerHeight();
+    scrollback.animate({ scrollTop: totalHeight });
+
     // TODO(jasvir): Almost certainly the wrong place to do this
     // $("#commandline")[0].scrollIntoView(true);
   }
@@ -152,71 +174,6 @@ define(['keys', 'history', 'cwd', 'jquery'], function(keys, historyApi, cwd, $){
     });
   }
   
-  function api(call, req, respFn) {
-    $.ajax({
-      contentType: 'application/json',
-      data: JSON.stringify({key: key, req: req}),
-      dataType: 'json',
-      error: function(xhr, stat, err) {
-        addOutput('err', 'error', stat + ': ' + err);
-      },
-      processData: false,
-      success: function(data, stat, xhr) {
-        respFn(data);
-      },
-      type: 'POST',
-      url: '/api/' + call
-    });
-  }
-  
-  function pollResult(data) {
-    var jobsRunning = false;
-    var jobsDone = false;
-    
-    data.forEach(function(d) {
-      var job = ('job' in d) ? d.job : "unknown";
-
-      if ('stdout' in d) {
-        addOutput(job, 'stdout', d.stdout);
-      }
-      if ('stderr' in d) {
-        addOutput(job, 'stderr', d.stderr);
-      }
-      if ('jsonout' in d) {
-        if (job === 'ctx') {
-          d.jsonout.forEach(updateContext);
-        } else if (job === 'comp') {
-          d.jsonout.forEach(updateAnnotations);
-        } else {
-          var s = "";
-          d.jsonout.forEach(function(j) {
-            s += JSON.stringify(j, null, 4);
-            s += "\n";
-          });
-          addOutput(job, 'stdout', s);
-        }
-      }
-      if ('running' in d) {
-        if (d.running) {
-          setJobClass(job, "running");
-          jobsRunning = true;
-        }
-        else {
-          if (job !== 'ctx') {
-            setJobClass(job, d.exitcode == 0 ? "complete" : "failed");
-            jobsDone = true;
-          }
-        }
-      }
-    });
-    if (jobsRunning) {
-      setTimeout(poll, 25);
-    }
-    if (jobsDone) {
-      runContext();
-    }
-  }
-
   function prevCommand(that, cmd, e) {
     that.val(historyApi.previous(cmd));
   }
@@ -226,18 +183,18 @@ define(['keys', 'history', 'cwd', 'jquery'], function(keys, historyApi, cwd, $){
   }
 
   function runCommand(that, cmd, e) {
-    var job = addJobDiv(cmd);
-    addOutput(job, 'stdin', cmd);
     that.val('');
     historyApi.add(cmd);
     $('#annotations').text('')
-    api('run', {job: job, cmd: cmd}, cmdResult);
     $("#commandline").focus();
 
-  }
+    var jobView = new JobView();
+    jobManager.run(cmd, function(err, job) {
+      if (err) throw err;
 
-  function poll() {
-    api('poll', null, pollResult);
+      jobView.setJob(job);
+      jobView.addOutput('stdin', cmd);
+    });
   }
 
   var checkTimer = null;
@@ -251,29 +208,68 @@ define(['keys', 'history', 'cwd', 'jquery'], function(keys, historyApi, cwd, $){
     })($(this), $(this).val());
   });
 
-  function runContext() {
-    api('run', {job: 'ctx', cmd: 'context'}, cmdResult);
-  }
-  
-  function cmdResult(data) {
-    var job = ('job' in data) ? data.job : "unknown";
+  var contextPoller = poller();
+  var contextJob = null;
+  var contextJobs = [];  // HACK until Job#kill works
+  contextPoller.on('poll', function() {
+    if (contextJob) {
+      //contextJob.kill();  // TODO
+    }
+    contextJob = null;
 
-    if ('parseError' in data) {
-      addOutput(job, 'error', data.parseError);
+    contextPoller.pause();
+    jobManager.run('context', function(err, job) {
+      if (err) throw err;
+
+      if (contextJob) {
+        // Another context job already running
+        //job.kill();  // TODO
+        return;
+      }
+
+      contextJob = job;
+      contextJobs.push(job);  // HACK
+
+      job.jsonout.on('data', function(data) {
+        data.forEach(updateContext);
+      });
+
+      job.on('exit', function(exitcode) {
+        setTimeout(function() { // HACK
+          if (contextJob === job) {
+            contextJob = null;
+          }
+
+          // HACK
+          var idx = contextJobs.indexOf(job);
+          if (idx >= 0) {
+            contextJobs.splice(idx, 1);
+          }
+        }, 0);
+      });
+    });
+  });
+  contextPoller.resume();
+
+  jobManager.on('jobexit', function(job, exitcode) {
+    if (contextJobs.indexOf(job) >= 0) {
+      // Ignore context jobs exiting
+      return;
     }
-    if (data.running) {
-      setJobClass(job, "running");
-      poll();
-    }
-  }
+
+    contextPoller.resume();
+  });
   
   function runComplete() {
     var cmd = $('#commandline').val();
     cmd.replace(/'/g,"'\\''");
     cmd = "complete '" + cmd + "'";
-    api('run', {job: 'comp', cmd: cmd}, cmdResult);
-  }
-  
-  runContext();
+    jobManager.run(cmd, function(err, job) {
+      if (err) throw err;
 
+      job.jsonout.on('data', function(data) {
+        data.forEach(updateAnnotations);
+      });
+    });
+  }
 });

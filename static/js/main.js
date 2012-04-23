@@ -18,6 +18,7 @@ require.config({
     jqueryui:     'libs/jqueryui-1.8.14/jqueryui',
     underscore: 'libs/underscore/underscore',
     backbone:   'libs/backbone/backbone',
+    EventEmitter: 'libs/EventEmitter/EventEmitter',
     text:       'libs/require/text',
     templates:   '../templates'
   }
