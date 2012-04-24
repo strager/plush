@@ -210,7 +210,6 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
 
   var contextPoller = poller();
   var contextJob = null;
-  var contextJobs = [];  // HACK until Job#kill works
   contextPoller.on('poll', function() {
     if (contextJob) {
       //contextJob.kill();  // TODO
@@ -218,7 +217,7 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
     contextJob = null;
 
     contextPoller.pause();
-    jobManager.run('context', function(err, job) {
+    jobManager.runHidden('context', function(err, job) {
       if (err) throw err;
 
       if (contextJob) {
@@ -228,7 +227,6 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
       }
 
       contextJob = job;
-      contextJobs.push(job);  // HACK
 
       job.jsonout.on('data', function(data) {
         data.forEach(updateContext);
@@ -239,12 +237,6 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
           if (contextJob === job) {
             contextJob = null;
           }
-
-          // HACK
-          var idx = contextJobs.indexOf(job);
-          if (idx >= 0) {
-            contextJobs.splice(idx, 1);
-          }
         }, 0);
       });
     });
@@ -252,11 +244,6 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
   contextPoller.resume();
 
   jobManager.on('jobexit', function(job, exitcode) {
-    if (contextJobs.indexOf(job) >= 0) {
-      // Ignore context jobs exiting
-      return;
-    }
-
     contextPoller.resume();
   });
   

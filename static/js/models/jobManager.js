@@ -47,6 +47,11 @@ define(['EventEmitter', 'poller', 'StringStream', 'JsonStream'], function(EventE
   var runningJobs = { };
   jobManager.runningJobs = runningJobs;
 
+  // Hidden jobs are jobs which do not have global
+  // notifications.  In other words, jobrun and jobexit
+  // are not emitted on jobManager for hidden jobs.
+  var hiddenJobs = [ ];
+
   // The unknown job is where data for unknown jobs is sent.
   var unknownJob = new Job('unknown');
   jobManager.unknownJob = unknownJob;
@@ -123,7 +128,14 @@ define(['EventEmitter', 'poller', 'StringStream', 'JsonStream'], function(EventE
 
         var exitcode = jobUpdate.exitcode || 0;
         job.emit('exit', exitcode);
-        jobManager.emit('jobexit', job, exitcode);
+
+        var hiddenIndex = hiddenJobs.indexOf(job);
+        if (hiddenIndex >= 0) {
+          // Job is hidden; don't emit jobexit
+          hiddenJobs.splice(hiddenIndex, 1);
+        } else {
+          jobManager.emit('jobexit', job, exitcode);
+        }
       }
     }
   }
@@ -157,25 +169,51 @@ define(['EventEmitter', 'poller', 'StringStream', 'JsonStream'], function(EventE
     });
   });
 
-  function run(cmd, callback) {
+  function runRaw(cmd, callback) {
     var jobName = newJobName();
     api('run', {job: jobName, cmd: cmd}, function(err, data) {
       if ('parseError' in data) {
         return callback(new SyntaxError(data.parseError));
       }
 
+      callback(null, data);
+    });
+  }
+
+  function run(cmd, callback) {
+    var jobName = newJobName();
+    api('run', {job: jobName, cmd: cmd}, function(err, data) {
+      if (err) return callback(err);
+
+      jobName = data.job;
+
       jobUpdatePoller.resume();
 
       var job = new Job(jobName);
-
       runningJobs[jobName] = job;
-
       jobManager.emit('jobrun', job, cmd);
 
       callback(null, job);
     });
   }
 
+  function runHidden(cmd, callback) {
+    runRaw(cmd, function(err, data) {
+      if (err) return callback(err);
+
+      jobName = data.job;
+
+      jobUpdatePoller.resume();
+
+      var job = new Job(jobName);
+      runningJobs[jobName] = job;
+      hiddenJobs.push(job);
+
+      callback(null, job);
+    });
+  }
+
   jobManager.run = run;
+  jobManager.runHidden = runHidden;
   return jobManager;
 });
