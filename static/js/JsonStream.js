@@ -59,7 +59,7 @@ define(['EventEmitter'], function(EventEmitter) {
     }
 
     this.buffer.push(data);
-    this.checkBufferLater();
+    this.checkBuffer();
 
     return true;
   };

@@ -193,7 +193,9 @@ define(['EventEmitter', 'poller', 'StringStream', 'JsonStream'], function(EventE
       runningJobs[jobName] = job;
       jobManager.emit('jobrun', job, cmd);
 
-      callback(null, job);
+      if (typeof callback === 'function') {
+        callback(null, job);
+      }
     });
   }
 
@@ -209,7 +211,9 @@ define(['EventEmitter', 'poller', 'StringStream', 'JsonStream'], function(EventE
       runningJobs[jobName] = job;
       hiddenJobs.push(job);
 
-      callback(null, job);
+      if (typeof callback === 'function') {
+        callback(null, job);
+      }
     });
   }
 
