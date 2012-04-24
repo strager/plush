@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], function(keys, historyApi, cwd, $, jobManager, poller){
+define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller'], function(keys, historyApi, cwd, $, jobManager, commandPoller){
   "use strict";
   
   var key = (function initializeKey() {
@@ -208,37 +208,11 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'poller'], func
     })($(this), $(this).val());
   });
 
-  var contextPoller = poller();
-  var contextJob = null;
-  contextPoller.on('poll', function() {
-    if (contextJob) {
-      //contextJob.kill();  // TODO
-    }
-    contextJob = null;
+  var contextPoller = commandPoller('context', function(err, job) {
+    if (err) throw err;
 
-    contextPoller.pause();
-    jobManager.runHidden('context', function(err, job) {
-      if (err) throw err;
-
-      if (contextJob) {
-        // Another context job already running
-        //job.kill();  // TODO
-        return;
-      }
-
-      contextJob = job;
-
-      job.jsonout.on('data', function(data) {
-        data.forEach(updateContext);
-      });
-
-      job.on('exit', function(exitcode) {
-        setTimeout(function() { // HACK
-          if (contextJob === job) {
-            contextJob = null;
-          }
-        }, 0);
-      });
+    job.jsonout.on('data', function(data) {
+      data.forEach(updateContext);
     });
   });
   contextPoller.resume();
