@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller'], function(keys, historyApi, cwd, $, jobManager, commandPoller){
+define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller', 'fileTree'], function(keys, historyApi, cwd, $, jobManager, commandPoller, _fileTree){
   "use strict";
   
   var key = (function initializeKey() {

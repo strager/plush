@@ -78,13 +78,27 @@ div.maia-breadcrumb {
   overflow: hidden;
 }
 
+#file-tree {
+  overflow: auto;
+  position: absolute;
+  top: 0;
+  bottom: 2.5em;
+  right: 0.5em;
+  width: 10em;
+}
+
+#file-tree > * {
+  padding-top: 1em;
+  padding-bottom: 1em;
+}
+
 #scrollback {
   overflow: auto;
   position: absolute;
   top: 0;
   bottom: 2.5em;
   left: 0.5em;
-  right: 0.5em;
+  right: 11.5em;
 }
 
 #scrollback > * {
