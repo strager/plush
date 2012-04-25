@@ -80,8 +80,8 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller'
 
     job.jsonout.on('data', function(data) {
       self.addOutput('stdout', data.reduce(function(acc, json) {
-        return acc + JSON.stringify(j, null, 4) + "\n";
-      }));
+        return acc + JSON.stringify(json, null, 4) + "\n";
+      }, ''));
     });
   };
 
