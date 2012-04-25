@@ -92,6 +92,16 @@ div.maia-breadcrumb {
   padding-bottom: 1em;
 }
 
+#file-tree .expanded {
+  background-color: #DCE8F9;
+  border-radius: 4px;
+}
+
+#file-tree li {
+  padding: 1px 4px;
+  margin: 2px;
+}
+
 #scrollback {
   overflow: auto;
   position: absolute;

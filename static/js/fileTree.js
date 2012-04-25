@@ -1,4 +1,4 @@
-define(['models/jobManager', 'commandPoller'], function(jobManager, commandPoller) {
+define(['models/jobManager', 'commandPoller', 'annotations'], function(jobManager, commandPoller, annotations) {
   var TYPE_DIRECTORY = 'd';
   var TYPE_FILE = 'f';
   var TYPE_UNKNOWN = '?';
@@ -64,7 +64,48 @@ define(['models/jobManager', 'commandPoller'], function(jobManager, commandPolle
     });
   }
 
-  var $fileTree = $('#file-tree');
+  function FileTreeView($node) {
+    this.$node = $node;
+    this.$list = $('<ul>').appendTo($node.empty());  // HACK
+    this.entries = [];
+  }
+
+  FileTreeView.prototype.setEntries = function(entries) {
+    // TODO Super smart algorithms which don't kill the GC by
+    // baleting and creating a zillion DOM nodes each update.
+    this.$list.empty();
+    this.$list.append(entries.map(function(entry) {
+      var $link;
+      if (entry.type === TYPE_DIRECTORY) {
+        $link = $('<a>')
+          .attr('href', 'run:cd ' + entry.name)
+          .text(entry.name + '/')
+          .click(function() {
+            // TODO Escape!!!
+            jobManager.run('cd \'' + entry.name + '\'');
+            return false;
+          });
+      } else {
+        $link = $('<span>').text(entry.name);
+      }
+
+      return $('<li>').append($link).get(0);
+    }));
+
+    this.entries = entries;
+  };
+
+  FileTreeView.prototype.getEntryByName$ = function(name) {
+    for (var i = 0; i < this.entries.length; ++i) {
+      if (this.entries[i].name === name) {
+        return this.$list.children().eq(i);
+      }
+    }
+
+    return $([]);
+  };
+
+  var fileTreeView = new FileTreeView($('#file-tree'));
 
   var lsPoller = commandPoller('ls -la', function(err, job) {
     var buffer = '';
@@ -78,34 +119,28 @@ define(['models/jobManager', 'commandPoller'], function(jobManager, commandPolle
       }
 
       var entries = parseLSOutput(buffer);
-
-      // TODO Super smart algorithms which don't kill the GC
-      // by baleting and creating a zillion DOM nodes each
-      // update.
-      var $list = $('<ul>').append(entries.map(function(entry) {
-        var $link;
-        if (entry.type === TYPE_DIRECTORY) {
-          $link = $('<a>')
-            .attr('href', 'run:cd ' + entry.name)
-            .text(entry.name + '/')
-            .click(function() {
-              // TODO Escape!!!
-              jobManager.run('cd \'' + entry.name + '\'');
-              return false;
-            });
-        } else {
-          $link = $('<span>').text(entry.name);
-        }
-
-        return $('<li>').append($link).get(0);
-      }));
-
-      $fileTree.empty().append($list);
+      fileTreeView.setEntries(entries);
     });
   });
 
   lsPoller.resume();
   jobManager.on('jobexit', function(job, exitcode) {
     lsPoller.resume();
+  });
+
+  annotations.on('reset', function() {
+    fileTreeView.$list.children().removeClass('expanded');
+  });
+
+  annotations.on('update', function(annotationData) {
+    var spans = annotationData.spans || [];
+    spans.forEach(function(spanData) {
+      spanData.annotations.forEach(function (annoData) {
+        if (annoData.expansion) {
+          var $li = fileTreeView.getEntryByName$(annoData.expansion);
+          $li.addClass('expanded');
+        }
+      });
+    });
   });
 });

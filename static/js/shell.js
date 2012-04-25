@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller', 'fileTree'], function(keys, historyApi, cwd, $, jobManager, commandPoller, _fileTree){
+define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller', 'annotations', 'fileTree'], function(keys, historyApi, cwd, $, jobManager, commandPoller, annotations, _fileTree){
   "use strict";
   
   var key = (function initializeKey() {
@@ -221,16 +221,10 @@ define(['keys', 'history', 'cwd', 'jquery', 'models/jobManager', 'commandPoller'
     contextPoller.resume();
   });
   
+  annotations.on('update', updateAnnotations);
+
   function runComplete() {
     var cmd = $('#commandline').val();
-    cmd.replace(/'/g,"'\\''");
-    cmd = "complete '" + cmd + "'";
-    jobManager.run(cmd, function(err, job) {
-      if (err) throw err;
-
-      job.jsonout.on('data', function(data) {
-        data.forEach(updateAnnotations);
-      });
-    });
+    annotations.check(cmd);
   }
 });
