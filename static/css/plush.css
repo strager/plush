@@ -97,9 +97,17 @@ div.maia-breadcrumb {
   border-radius: 4px;
 }
 
+#file-tree ul {
+  list-style: none;
+}
+
 #file-tree li {
   padding: 1px 4px;
   margin: 2px;
+}
+
+#file-tree ul ul {
+  padding-left: 4px;
 }
 
 #scrollback {
